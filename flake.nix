@@ -21,9 +21,7 @@
           owner = "rvaiya";
           repo = "keyd";
           rev = "v${finalAttrs.version}";
-          # Placeholder: first `nix build` fails and prints the real hash.
-          # Paste it here, rebuild. After that the source is pinned.
-          hash = pkgs.lib.fakeHash;
+          hash = "sha256-pylfQjTnXiSzKPRJh9Jli1hhin/MIGIkZxLKxqlReVo=";
         };
 
         # scdoc only matters if `make`'s default target builds the man pages.

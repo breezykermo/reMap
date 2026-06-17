@@ -11,9 +11,11 @@ RM_DEST="${RM_DEST:-/home/root/bin/keyd}"
 nix build .#keyd-static --print-build-logs
 
 echo "== verifying static link =="
-file result/bin/keyd
-# No output from readelf -d == no NEEDED == truly static.
-nix shell nixpkgs#binutils --command readelf -d result/bin/keyd || true
+# "no dynamic section" == truly static; confirm arch is AArch64.
+nix shell nixpkgs#binutils --command sh -c '
+  readelf -h result/bin/keyd | grep -E "Class|Machine|Type"
+  readelf -d result/bin/keyd
+'
 
 if [[ "${1:-}" == "deploy" ]]; then
   ssh "$RM_HOST" 'mkdir -p /home/root/bin'
