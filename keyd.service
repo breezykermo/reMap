@@ -1,0 +1,15 @@
+[Unit]
+Description=keyd – Colemak remap for reMarkable Type Folio
+Documentation=https://github.com/rvaiya/keyd
+# keyd handles folio hotplug itself via [ids]; Restart=always covers the case
+# where it launches before /dev/uinput or the input nodes are ready.
+After=systemd-udev-settle.service
+
+[Service]
+Type=simple
+ExecStart=/home/root/bin/keyd
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

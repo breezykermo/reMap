@@ -30,6 +30,10 @@
 
         enableParallelBuilding = true;
 
+        # Bake the config dir into /home/root/keyd so config survives OS updates
+        # (rootfs/etc is wiped; /home is not). CONFIG_DIR?=/etc/keyd in the Makefile.
+        makeFlags = [ "CONFIG_DIR=/home/root/keyd" ];
+
         # pkgsStatic already forces static linking via the musl stdenv; this is
         # belt-and-suspenders and *appends* (doesn't clobber keyd's own LDFLAGS).
         NIX_CFLAGS_LINK = "-static";
