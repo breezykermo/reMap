@@ -51,9 +51,38 @@
 
         meta.description = "keyd daemon, static aarch64 build for reMarkable Paper Pro";
       });
+
+      # Fonts are architecture-independent, so they come from the native pkgs
+      # set rather than the cross one.
+      #
+      # Only the two variable TTFs. The device's rootfs runs at ~90% full with
+      # around 40M to spare, and the `Inter.ttc` in the same package is 13M on
+      # its own -- while the variable pair is under 2M and matches how the
+      # device ships its own fonts (Noto and EB Garamond are both variable).
+      inter-variable = pkgs.runCommand "inter-variable-ttf" { } ''
+        mkdir -p $out
+        find ${pkgs.inter}/share/fonts -name 'InterVariable*.ttf' -exec cp {} $out/ \;
+        test -e $out/InterVariable.ttf   # fail loudly if upstream renames these
+      '';
+
+      # Inter wearing the "Noto Sans" name, to stand behind one of the font
+      # picker's entries -- see retag-family.py and the README. The filenames
+      # match what the device ships so the upright font lands on top of the
+      # stock one; the italic is an addition, since stock ships none.
+      inter-as-noto-sans = pkgs.runCommand "inter-as-noto-sans" {
+        nativeBuildInputs = [ (pkgs.python3.withPackages (ps: [ ps.fonttools ])) ];
+      } ''
+        mkdir -p $out
+        python3 ${./retag-family.py} \
+          ${inter-variable}/InterVariable.ttf \
+          "$out/NotoSans-VariableFont_wdth,wght.ttf" "Noto Sans" Regular
+        python3 ${./retag-family.py} \
+          ${inter-variable}/InterVariable-Italic.ttf \
+          "$out/NotoSans-Italic-VariableFont_wdth,wght.ttf" "Noto Sans" Italic
+      '';
     in {
       packages.${system} = {
-        inherit keyd-static;
+        inherit keyd-static inter-variable inter-as-noto-sans;
         default = keyd-static;
       };
     };

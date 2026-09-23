@@ -95,20 +95,65 @@ of the unit live under `/home/root/keyd`, which survives — so restoring everyt
 
 ```sh
 ./build.sh
+./fonts.sh    # if you installed fonts too — they live on the rootfs, so they go as well
 ```
 
 There is no reliable in-OS hook to re-install automatically (the post-update system is stock
-and scans no persistent path), so this manual one-liner after a deliberate update is the
+and scans no persistent path), so these manual one-liners after a deliberate update are the
 intended workflow.
+
+## Fonts
+
+A keyboard is half of typing; the other half is what the letters look like. `./fonts.sh`
+installs [Inter](https://rsms.me/inter/) on the device.
+
+```sh
+./fonts.sh            # build + add + replace   [run this after an OS update]
+./fonts.sh restore    # put the stock Noto Sans back
+```
+
+Two things happen, because xochitl treats fonts in two unrelated ways.
+
+**Adding a font is not enough.** `xochitl` reads exactly one hardcoded directory,
+`/usr/share/fonts/ttf/` — it ignores fontconfig's user paths, so `~/.local/share/fonts` is
+never consulted. Dropping a font there makes it available for rendering and fallback, which is
+what you want for, say, CJK coverage. But it will *not* appear in the font picker: that list is
+curated, not scanned. The labels live in the UI translations (`FormatFont`), and there are four
+of them — `Ebook default`, `reMarkable Sans`, `reMarkable Serif`, `EB Garamond`.
+
+To read the list off the device yourself, decompile a *non-English* catalog — the English one
+is the source language and is only partially populated:
+
+```sh
+scp root@10.11.99.1:/usr/share/remarkable/xochitl/translations/reMarkable_es.qm .
+lconvert -i reMarkable_es.qm -o rm_es.ts   # then look at the Format* contexts
+```
+
+**So the font has to be let in under a name already on the list.** `retag-family.py` rewrites
+Inter's name table to claim the `Noto Sans` family, and that file is installed over the stock
+one. The picker entry is still called "reMarkable Sans"; the glyphs that come out are Inter's.
+Only the name table is touched — outlines, metrics and the variable axes are untouched.
+
+This does mean **Inter replaces Noto Sans everywhere**, interface included, not only in typed
+text. The stock font is backed up to `/home/root/fonts/backup/` the first time, so
+`./fonts.sh restore` is a complete undo. Scripts Inter does not cover (CJK, Arabic, Hebrew,
+Devanagari, Thai) are unaffected — they live in their own Noto files, which are left alone.
+
+Two practical notes. The rootfs runs at ~90% full with about 40M free, so only the two variable
+TTFs are installed (under 2M); the `Inter.ttc` in the same nixpkgs package is 13M by itself.
+And the UI is stopped before the swap: overwriting a font file that xochitl has mapped is what
+otherwise leaves `/` stuck read-write.
 
 ## Repository layout
 
-| File          | Purpose                                                            |
-|---------------|-------------------------------------------------------------------|
-| `flake.nix`   | reproducible static aarch64 cross-build of keyd (musl, `-static`) |
-| `keyd.conf`   | the layout — `[ids]` match + keycode swaps                        |
-| `keyd.service`| systemd unit; canonical copy is kept on `/home` and re-installed  |
-| `build.sh`    | build / deploy / start helper                                     |
+| File               | Purpose                                                           |
+|--------------------|-------------------------------------------------------------------|
+| `flake.nix`        | reproducible static aarch64 cross-build of keyd (musl, `-static`) |
+| `keyd.conf`        | the layout — `[ids]` match + keycode swaps                        |
+| `keyd.service`     | systemd unit; canonical copy is kept on `/home` and re-installed  |
+| `build.sh`         | build / deploy / start helper                                     |
+| `fonts.sh`         | install Inter — add to the font dir, and take over a picker entry |
+| `retag-family.py`  | rewrite a font's family name so it can stand in for another       |
 
 ## Caveats
 
