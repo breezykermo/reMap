@@ -45,18 +45,32 @@ Requires [nix](https://nix.dev/) and an SSH setup to your reMarkable Pro
 ```
 
 That one command builds the static binary, deploys it plus `keyd.conf` and the systemd unit to
-the device, installs the unit, and enables + starts the service. Type on the Folio — you should
-be in Colemak immediately and after every reboot.
+the device, installs the unit, enables + starts the service, and writes the unit to the rootfs
+so it comes back after a reboot. Type on the Folio — you should be in Colemak immediately.
 
 Point at a different device with `RM_HOST=root@<ip> ./build.sh`.
 
 ### Sub-commands
 
-| Command            | Does                                             |
-|--------------------|--------------------------------------------------|
-| `./build.sh`       | build + deploy + (re)start the service           |
-| `./build.sh deploy`| build + deploy files only, leave the service     |
-| `./build.sh build` | build only, leaves `./result/bin/keyd`           |
+| Command             | Does                                                |
+|---------------------|-----------------------------------------------------|
+| `./build.sh`        | build + deploy + (re)start the service + persist it |
+| `./build.sh deploy` | build + deploy files only, leave the service        |
+| `./build.sh build`  | build only, leaves `./result/bin/keyd`              |
+| `./build.sh persist`| only re-write the unit to the rootfs                |
+
+### Surviving a reboot
+
+On current Paper Pro builds (checked on OS `20260911`) `/etc` is an overlay whose upper dir is
+the tmpfs at `/var/volatile/etc`. Everything `systemctl enable` writes there is therefore gone
+at the next boot — not only after an OS update, as "the rootfs gets replaced" would suggest.
+
+So `build.sh` has a second install step. A plain, non-recursive bind mount of `/` exposes the
+root filesystem's own directories *without* the submounts stacked on top of them, which means
+the bind's `etc` is the real on-disk `/etc` rather than the overlay in front of it. The unit
+and its `multi-user.target.wants` symlink are written there, with `/` remounted read-write for
+the moment it takes and put back read-only afterwards. Enabling is done by hand — `systemctl`
+would only ever write to the overlay.
 
 ## Customizing the layout
 
@@ -99,8 +113,19 @@ intended workflow.
 ## Caveats
 
 - Developer-mode and root SSH access are required; this modifies system state on the device.
-- `keyd` runs as root and exclusively grabs the keyboard. To remove it:
-  `ssh root@10.11.99.1 'systemctl disable --now keyd.service'`.
+- `keyd` runs as root and exclusively grabs the keyboard. To remove it, stop the running
+  service *and* delete the rootfs copy the persist step wrote, or it comes back next boot:
+
+  ```sh
+  ssh root@10.11.99.1 'systemctl disable --now keyd.service
+    mkdir -p /tmp/rootfs && mount -o remount,rw / && mount --bind / /tmp/rootfs
+    rm -f /tmp/rootfs/etc/systemd/system/keyd.service \
+          /tmp/rootfs/etc/systemd/system/multi-user.target.wants/keyd.service
+    umount /tmp/rootfs; mount -o remount,ro /'
+  ```
+- The persist step writes to the lower dir of a mounted overlay, which overlayfs calls
+  undefined for the *live* mount. It is only read again when the overlay is rebuilt at the
+  next boot, and the current boot is already served by the copy in the upper dir.
 - The harmless `failed to set effective group to "keyd"` warning just means keyd couldn't drop
   to a `keyd` group (which doesn't exist on the device); it keeps running as root.
 
